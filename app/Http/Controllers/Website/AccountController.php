@@ -1,0 +1,111 @@
+<?php
+
+namespace App\Http\Controllers\Website;
+
+use App\Models\User;
+use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
+
+class AccountController extends Controller
+{
+    // profile Page
+    public function profilePage()
+    {
+        return view('user.account.accountprofile');
+    }
+
+    // profile Edit Page
+    public function profileEdit()
+    {
+        return view('user.account.accountprofileupdate');
+    }
+
+    // profile update
+    public function profileUpdate(Request $request,$id)
+    {
+       $this->profileValidation($request);
+       $data = $this->profileData($request);
+       if($request->hasFile('image')){
+          $dbImage = User::where('id',$id)->first();
+          $dbImage = $dbImage->image;
+          if ($dbImage != null) {
+             Storage::delete('public/'.$dbImage);
+          }
+          $filename = uniqid() . $request->file('image')->getClientOriginalName();
+          $request->file('image')->storeAs('public',$filename);
+          $data['image'] = $filename;
+       }
+       User::where('id',$id)->update($data);
+       return redirect()->route('user#accountprofilepage')->with('success','Success Profile Update');
+    }
+
+     // profile data store
+     private function profileData($request)
+     {
+         $response = [
+             'name' => $request->name,
+             'phone' => $request->phone,
+             'email' => $request->email,
+             'address' => $request->address,
+             'country' => $request->country,
+             'language' => $request->language,
+             'gender' => $request->gender,
+         ];
+         return $response;
+     }
+
+      // direct change password page
+    public function changePasswordPage()
+    {
+       return view('user.account.changepassword');
+    }
+
+    // change password
+    public function changePassword(Request $request)
+    {
+        $this->passwordValidation($request);
+        $currentId = Auth::user()->id;
+        $user = User::where('id',$currentId)->first();
+        $dbPassword = $user->password;
+        if (Hash::check($request->oldPassword, $dbPassword)) {
+            $updatePassword = [
+                'password' => Hash::make($request->newPassword),
+            ];
+            User::where('id',$currentId)->update($updatePassword);
+            Auth::logout();
+	        return redirect('/');
+        }
+        return back();
+    }
+
+     // profile data validation
+     private function profileValidation($request)
+     {
+         $response = [
+             'name' => 'required',
+             'phone' => 'required',
+             'email' => 'required',
+             'address' => 'required',
+             'country' => 'required',
+             'language' => 'required',
+             'gender' => 'required',
+             'image' => 'mimes:jpg,jpeg,png',
+         ];
+         Validator::make($request->all(),$response)->validate();
+     }
+
+     // password validation
+    private function passwordValidation ($request)
+    {
+        $response = [
+            'oldPassword'  => 'required|min:6|max:10',
+            'newPassword'  => 'required|min:6|max:10',
+            'confirmPassword'  => 'required|min:6|max:10|same:newPassword',
+        ];
+        Validator::make($request->all(),$response)->validate();
+    }
+}
